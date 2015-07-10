@@ -29,7 +29,7 @@ func PrintString(data []byte, formatType string) {
 	switch formatType {
 	case "txt":
 		{
-			fmt.Println(fmt.Sprintf("%s", data))
+			fmt.Print(fmt.Sprintf("%s", data))
 		}
 	case "json":
 		{
