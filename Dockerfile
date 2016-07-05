@@ -2,7 +2,7 @@ FROM gliderlabs/alpine:3.2
 
 MAINTAINER Ryan Eschinger <ryanesc@gmail.com>
 
-COPY . /go/
+COPY . /go/src/github.com/outbrain/zookeepercli/
 
 RUN apk add --update go git \
   && cd /go/src/github.com/outbrain/zookeepercli/ \
