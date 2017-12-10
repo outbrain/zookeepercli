@@ -35,8 +35,9 @@ var servers []string
 var authScheme string
 var authExpression []byte
 
-// We assume complete access to all
 var flags int32 = int32(0)
+
+// We assume complete access to all
 var acl []zk.ACL = zk.WorldACL(zk.PermAll)
 
 // SetServers sets the list of servers for the zookeeper client to connect to.
@@ -194,7 +195,7 @@ func ChildrenRecursive(path string) ([]string, error) {
 }
 
 // createInternal: create a new path
-func createInternal(connection *zk.Conn, path string, data []byte, acl []zk.ACL, force bool) (string, error) {
+func createInternal(connection *zk.Conn, path string, data []byte, acl []zk.ACL, force bool, flags int32) (string, error) {
 	if path == "/" {
 		return "/", nil
 	}
@@ -206,7 +207,7 @@ func createInternal(connection *zk.Conn, path string, data []byte, acl []zk.ACL,
 		returnValue, err := connection.Create(path, data, flags, acl)
 		log.Debugf("create status for %s: %s, %+v", path, returnValue, err)
 		if err != nil && force && attempts < 2 {
-			returnValue, err = createInternal(connection, gopath.Dir(path), []byte("zookeepercli auto-generated"), acl, force)
+			returnValue, err = createInternal(connection, gopath.Dir(path), []byte("zookeepercli auto-generated"), acl, force, flags)
 		} else {
 			return returnValue, err
 		}
@@ -215,7 +216,7 @@ func createInternal(connection *zk.Conn, path string, data []byte, acl []zk.ACL,
 }
 
 // createInternalWithACL: create a new path with acl
-func createInternalWithACL(connection *zk.Conn, path string, data []byte, force bool, perms []zk.ACL) (string, error) {
+func createInternalWithACL(connection *zk.Conn, path string, data []byte, force bool, perms []zk.ACL, flags int32) (string, error) {
 	if path == "/" {
 		return "/", nil
 	}
@@ -226,7 +227,7 @@ func createInternalWithACL(connection *zk.Conn, path string, data []byte, force 
 		returnValue, err := connection.Create(path, data, flags, perms)
 		log.Debugf("create status for %s: %s, %+v", path, returnValue, err)
 		if err != nil && force && attempts < 2 {
-			returnValue, err = createInternalWithACL(connection, gopath.Dir(path), []byte("zookeepercli auto-generated"), force, perms)
+			returnValue, err = createInternalWithACL(connection, gopath.Dir(path), []byte("zookeepercli auto-generated"), force, perms, flags)
 		} else {
 			return returnValue, err
 		}
@@ -238,7 +239,7 @@ func createInternalWithACL(connection *zk.Conn, path string, data []byte, force 
 // The "force" param controls the behavior when path's parent directory does not exist.
 // When "force" is false, the function returns with error/ When "force" is true, it recursively
 // attempts to create required parent directories.
-func Create(path string, data []byte, aclstr string, force bool) (string, error) {
+func Create(path string, data []byte, aclstr string, force bool, flags int32) (string, error) {
 	connection, err := connect()
 	if err != nil {
 		return "", err
@@ -252,17 +253,17 @@ func Create(path string, data []byte, aclstr string, force bool) (string, error)
 		}
 	}
 
-	return createInternal(connection, path, data, acl, force)
+	return createInternal(connection, path, data, acl, force, flags)
 }
 
-func CreateWithACL(path string, data []byte, force bool, perms []zk.ACL) (string, error) {
+func CreateWithACL(path string, data []byte, force bool, perms []zk.ACL, flags int32) (string, error) {
 	connection, err := connect()
 	if err != nil {
 		return "", err
 	}
 	defer connection.Close()
 
-	return createInternalWithACL(connection, path, data, force, perms)
+	return createInternalWithACL(connection, path, data, force, perms, flags)
 }
 
 // Set updates a value for a given path, or returns with error if the path does not exist
@@ -296,7 +297,7 @@ func SetACL(path string, aclstr string, force bool) (string, error) {
 		}
 
 		if !exists {
-			return createInternal(connection, path, []byte(""), acl, force)
+			return createInternal(connection, path, []byte(""), acl, force, flags)
 		}
 	}
 
