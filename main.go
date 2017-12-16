@@ -42,6 +42,7 @@ func main() {
 	authUser := flag.String("auth_usr", "", "optional, digest scheme, user")
 	authPwd := flag.String("auth_pwd", "", "optional, digest scheme, pwd")
 	acls := flag.String("acls", "31", "optional, csv list [1|,2|,4|,8|,16|,31]")
+	createSeq := flag.Bool("sequence", false, "enable sequence flag for create")
 	flag.Parse()
 
 	log.SetLevel(log.ERROR)
@@ -156,18 +157,24 @@ func main() {
 				aclstr = flag.Arg(2)
 			}
 
+			var createFlags = int32(0)
+			// check zk CreateMode enum for the correct integer to add
+			if *createSeq {
+				createFlags += 2
+			}
+
 			if *authUser != "" && *authPwd != "" {
 				perms, err := zk.BuildACL("digest", *authUser, *authPwd, *acls)
 				if err != nil {
 					log.Fatale(err)
 				}
-				if result, err := zk.CreateWithACL(path, []byte(flag.Arg(1)), *force, perms); err == nil {
+				if result, err := zk.CreateWithACL(path, []byte(flag.Arg(1)), *force, perms, createFlags); err == nil {
 					log.Infof("Created %+v", result)
 				} else {
 					log.Fatale(err)
 				}
 			} else {
-				if result, err := zk.Create(path, []byte(flag.Arg(1)), aclstr, *force); err == nil {
+				if result, err := zk.Create(path, []byte(flag.Arg(1)), aclstr, *force, createFlags); err == nil {
 					log.Infof("Created %+v", result)
 				} else {
 					log.Fatale(err)
