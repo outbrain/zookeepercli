@@ -43,6 +43,8 @@ func main() {
 	authUser := flag.String("auth_usr", "", "optional, digest scheme, user")
 	authPwd := flag.String("auth_pwd", "", "optional, digest scheme, pwd")
 	acls := flag.String("acls", "31", "optional, csv list [1|,2|,4|,8|,16|,31]")
+	concurrentRequests := flag.Int("concurrent_requests", 1, "Number of requests to make in parallel (results in faster lsr)")
+
 	flag.Parse()
 
 	log.SetLevel(log.ERROR)
@@ -147,7 +149,7 @@ func main() {
 		}
 	case "lsr":
 		{
-			if result, err := zook.ChildrenRecursive(path); err == nil {
+			if result, err := zook.ChildrenRecursive(path, *concurrentRequests); err == nil {
 				if *format == "txt" {
 					sort.Strings(result)
 				}
@@ -234,7 +236,7 @@ func main() {
 			if !(*force) {
 				log.Fatal("deleter (recursive) command requires --force for safety measure")
 			}
-			if err := zook.DeleteRecursive(path); err != nil {
+			if err := zook.DeleteRecursive(path, *concurrentRequests); err != nil {
 				log.Fatale(err)
 			}
 		}

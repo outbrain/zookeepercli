@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -168,37 +169,92 @@ func (zook *ZooKeeper) Children(path string) ([]string, error) {
 }
 
 // childrenRecursiveInternal: internal implementation of recursive-children query.
-func (zook *ZooKeeper) childrenRecursiveInternal(connection *zk.Conn, path string, incrementalPath string) ([]string, error) {
-	children, _, err := connection.Children(path)
-	if err != nil {
-		return children, err
+func (zook *ZooKeeper) childrenRecursiveInternal(connection *zk.Conn, path string, concurrentRequests int) ([]string, error) {
+	mu := &sync.Mutex{}
+	wg := sync.WaitGroup{}
+	jobs := make(chan string)
+	results := make(chan error)
+
+	basePath := path
+	if basePath != "/" {
+		basePath += "/"
 	}
-	sort.Sort(sort.StringSlice(children))
-	recursiveChildren := []string{}
-	for _, child := range children {
-		incrementalChild := gopath.Join(incrementalPath, child)
-		recursiveChildren = append(recursiveChildren, incrementalChild)
-		log.Debugf("incremental child: %+v", incrementalChild)
-		incrementalChildren, err := zook.childrenRecursiveInternal(connection, gopath.Join(path, child), incrementalChild)
-		if err != nil {
-			return children, err
+
+	var recursiveChildren []string
+
+	// Send the first job
+	wg.Add(1)
+	go func() {
+		jobs <- path
+	}()
+
+	for i := 0; i < concurrentRequests; i++ {
+		workerID := i + 1
+		log.Debugf("Launched worker %v of %v", workerID, concurrentRequests)
+		go func(connection *zk.Conn, jobs chan string, results chan<- error) {
+			for jobPath := range jobs {
+				log.Debugf("Worker %v received job %v", workerID, jobPath)
+				children, _, err := connection.Children(jobPath)
+				if err != nil {
+					go func() {
+						results <- fmt.Errorf("worker %v encountered an error with path %v: %s", workerID, jobPath, err.Error())
+					}()
+
+					wg.Done()
+					continue
+				}
+
+				for _, child := range children {
+					childPath := gopath.Join(jobPath, child)
+
+					mu.Lock()
+					recursiveChildren = append(recursiveChildren, strings.TrimPrefix(childPath, basePath))
+					mu.Unlock()
+
+					log.Debugf("Incremental child: %+v", childPath)
+
+					// Send the next job
+					wg.Add(1)
+					go func() {
+						jobs <- childPath
+					}()
+				}
+				wg.Done()
+				log.Debugf("Done processing %s", jobPath)
+			}
+		}(connection, jobs, results)
+		log.Debug("Worker exited")
+	}
+
+	log.Debug("All workers started, waiting for them to finish")
+	wg.Wait()
+	log.Debug("All workers finished")
+	close(jobs)
+
+	for {
+		select {
+		case err := <-results:
+			log.Debug("One of the workers encountered an error: ", err)
+			return nil, err
+		default:
+			log.Debug("No workers encountered errors")
+			return recursiveChildren, nil
 		}
-		recursiveChildren = append(recursiveChildren, incrementalChildren...)
 	}
-	return recursiveChildren, err
 }
 
 // ChildrenRecursive returns list of all descendants of given path (optionally empty), or error if the path
 // does not exist.
 // Every element in result list is a relative subpath for the given path.
-func (zook *ZooKeeper) ChildrenRecursive(path string) ([]string, error) {
+func (zook *ZooKeeper) ChildrenRecursive(path string, concurrentRequests int) ([]string, error) {
 	connection, err := zook.connect()
 	if err != nil {
 		return []string{}, err
 	}
 	defer connection.Close()
 
-	result, err := zook.childrenRecursiveInternal(connection, path, "")
+	result, err := zook.childrenRecursiveInternal(connection, path, concurrentRequests)
+	sort.Strings(result)
 	return result, err
 }
 
@@ -386,8 +442,8 @@ func (zook *ZooKeeper) Delete(path string) error {
 }
 
 // Delete recursive if has subdirectories.
-func (zook *ZooKeeper) DeleteRecursive(path string) error {
-	result, err := zook.ChildrenRecursive(path)
+func (zook *ZooKeeper) DeleteRecursive(path string, concurrentRequests int) error {
+	result, err := zook.ChildrenRecursive(path, concurrentRequests)
 	if err != nil {
 		log.Fatale(err)
 	}
