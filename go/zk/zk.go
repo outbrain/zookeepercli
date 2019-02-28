@@ -62,7 +62,7 @@ func (zook *ZooKeeper) SetAuth(scheme string, auth []byte) {
 	zook.authExpression = auth
 }
 
-// Returns acls
+// BuildACL returns acls
 func (zook *ZooKeeper) BuildACL(authScheme string, user string, pwd string, acls string) (perms []zk.ACL, err error) {
 	aclsList := strings.Split(acls, ",")
 	for _, elem := range aclsList {
