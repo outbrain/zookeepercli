@@ -1,0 +1,8 @@
+tenets:
+  import: codelingo/effective-go/update-comment-first-word-as-subject
+  import: codelingo/effective-go/comment-first-word-when-empty
+  import: codelingo/go/tested
+  import: codelingo/go/bool-param
+  import: codelingo/effective-go/package-comment
+  import: codelingo/go/empty-slice
+  import: codelingo/lightning-network-daemon/exported-package-is-tested
