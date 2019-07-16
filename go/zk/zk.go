@@ -25,6 +25,7 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 	"math"
 	gopath "path"
+	"robpike.io/filter"
 	"sort"
 	"strconv"
 	"strings"
@@ -400,4 +401,52 @@ func (zook *ZooKeeper) DeleteRecursive(path string) error {
 	}
 
 	return zook.Delete(path)
+}
+
+type command func(path string, conn *zk.Conn) ([]byte, error)
+
+func (zook *ZooKeeper) execute(path string, cmd command) ([]byte, error) {
+	if path[0] != '/' {
+		panic("Path must start with / character")
+	}
+
+	connection, err := zook.connect()
+	if err != nil {
+		return []byte{}, err
+	}
+	defer connection.Close()
+
+	return cmd(path, connection)
+}
+
+func findPropName(path string) string {
+	return path[strings.LastIndex(path, "/"):]
+}
+
+//GetH returns value associated with given path, or error if path does not exist.
+//In case value is not found go to parent and search again and so on.
+func (zook *ZooKeeper) GetH(path string) ([]byte, error) {
+	cmd := func(path string, conn *zk.Conn) ([]byte, error) {
+		parts := filter.Choose(strings.Split(path, "/"), notEmpty).([]string)
+		// cut property name
+		parts = parts[:len(parts)-1]
+		return zook.DoGetH(parts, findPropName(path))
+	}
+
+	return zook.execute(path, cmd)
+}
+
+func notEmpty(e string) bool { return len(e) != 0 }
+
+func (zook *ZooKeeper) DoGetH(propBasePath []string, propName string) ([]byte, error) {
+	var propValue []byte
+	for propValue == nil && len(propBasePath) != 0 {
+		propPath := "/" + strings.Join(propBasePath, "/") + propName
+		log.Debug("Looking for property at", propPath)
+		propValue, _ = zook.Get(propPath)
+
+		propBasePath = propBasePath[:len(propBasePath)-1]
+	}
+
+	return propValue, nil
 }

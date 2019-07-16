@@ -33,7 +33,7 @@ import (
 // main is the application's entry point.
 func main() {
 	servers := flag.String("servers", "", "srv1[:port1][,srv2[:port2]...]")
-	command := flag.String("c", "", "command, required (exists|get|ls|lsr|create|creater|set|delete|rm|deleter|rmr|getacl|setacl)")
+	command := flag.String("c", "", "command, required (exists|get|geth|ls|lsr|create|creater|set|delete|rm|deleter|rmr|getacl|setacl)")
 	force := flag.Bool("force", false, "force operation")
 	format := flag.String("format", "txt", "output format (txt|json)")
 	omitNewline := flag.Bool("n", false, "omit trailing newline with get in txt format")
@@ -80,7 +80,7 @@ func main() {
 	}
 
 	if len(*command) == 0 {
-		log.Fatal("Expected command (-c) (exists|get|ls|lsr|create|creater|set|delete|rm|deleter|rmr|getacl|setacl)")
+		log.Fatal("Expected command (-c) (exists|get|geth|ls|lsr|create|creater|set|delete|rm|deleter|rmr|getacl|setacl)")
 	}
 
 	if len(flag.Args()) < 1 {
@@ -121,6 +121,14 @@ func main() {
 	case "get":
 		{
 			if result, err := zook.Get(path); err == nil {
+				out.PrintString(result)
+			} else {
+				log.Fatale(err)
+			}
+		}
+	case "geth":
+		{
+			if result, err := zook.GetH(path); err == nil {
 				out.PrintString(result)
 			} else {
 				log.Fatale(err)
